@@ -132,14 +132,22 @@ async function runScheduledSubmission() {
 
     // Helper: fill all required fields on the current page section
     async function fillCurrentPage(currentPageNum = pageCount) {
-      // 0. Handle "Continue current draft?" dialog modal if present
-      const continueBtn = page.locator(
-        'div[role="dialog"] button:has-text("Continue"), div[role="dialog"] div[role="button"]:has-text("Continue"), div[role="dialog"] button:has-text("Restore"), div[role="dialog"] div[role="button"]:has-text("Restore")'
-      ).first();
-      if (await continueBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+      // 0. Handle "Continue current draft?" dialog modal if present.
+      // Google Forms renders this as role="alertdialog" with a "Use previous draft" button,
+      // not role="dialog"/"Continue" — so match both roles and all known button labels.
+      const draftDialog = page.locator('div[role="dialog"], div[role="alertdialog"]').first();
+      if (await draftDialog.isVisible({ timeout: 1500 }).catch(() => false)) {
         console.log('  Dismissing "Continue current draft?" popup modal...');
-        await continueBtn.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(500);
+        const resumeBtn = draftDialog
+          .locator('div[role="button"], button')
+          .filter({ hasText: /continue|restore|use previous draft|resume/i })
+          .first();
+        if (await resumeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+          await resumeBtn.click({ force: true }).catch(() => {});
+        } else {
+          await draftDialog.locator('div[role="button"], button').first().click({ force: true }).catch(() => {});
+        }
+        await page.waitForTimeout(800);
       }
 
       // 1. Email consent checkbox
