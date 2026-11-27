@@ -2,8 +2,8 @@ name: Daily Coursework Journal Submission
 
 on:
   schedule:
-    # 4:00 PM IST (16:00 IST) = 10:30 AM UTC, Monday–Friday only
-    - cron: '30 10 * * 1-5'
+    # 12:10 PM IST = 06:40 UTC, Monday–Friday only
+    - cron: '40 6 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -39,8 +39,10 @@ jobs:
 
       - name: Run Journal Submission Script
         env:
-          FORM_ID: ${{ secrets.FORM_ID }}
-          ENTRY_MAP: ${{ secrets.ENTRY_MAP }}
+          KALVIUM_URL: ${{ secrets.KALVIUM_URL }}
+          WORK_STATUS: ${{ secrets.WORK_STATUS }}
+          WORKLOG_CHALLENGES: ${{ secrets.WORKLOG_CHALLENGES }}
+          WORKLOG_BLOCKERS: ${{ secrets.WORKLOG_BLOCKERS }}
           GH_OWNER: ${{ secrets.GH_OWNER }}
           GH_REPO: ${{ secrets.GH_REPO }}
           GH_USERNAME: ${{ secrets.GH_USERNAME }}

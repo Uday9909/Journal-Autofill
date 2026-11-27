@@ -1,9 +1,8 @@
 import assert from 'node:assert';
 import test from 'node:test';
 import { getMidnightISO, getFormattedToday, generateCommitSummary } from '../src/summarizer.js';
-import { buildPrefilledUrl } from '../src/urlBuilder.js';
-import { isSunday } from '../src/submit.js';
-import { config } from '../src/config.js';
+import { isSunday, formatTodayLabel, buildWorklogText } from '../src/submit.js';
+import { config, DEFAULT_WORK_STATUS } from '../src/config.js';
 
 test('isSunday correctly detects Sunday vs non-Sunday', () => {
   const sundayDate = new Date('2026-08-09T12:00:00Z');
@@ -13,43 +12,28 @@ test('isSunday correctly detects Sunday vs non-Sunday', () => {
   assert.strictEqual(isSunday('UTC', mondayDate), false);
 });
 
-test('buildPrefilledUrl generates valid Google Form pre-filled URL', () => {
-  const formId = '1FAIpQLSc_EXAMPLE_FORM_ID';
-  const entryMap = { 'entry.123456789': 'Test response text' };
-
-  const url = buildPrefilledUrl({
-    formId,
-    entryMap,
-  });
-
-  assert.ok(url.startsWith(`https://docs.google.com/forms/d/e/${formId}/viewform?usp=pp_url`));
-  assert.ok(url.includes('entry.123456789=Test%20response%20text'));
+test('isSunday handles invalid date objects gracefully', () => {
+  assert.strictEqual(typeof isSunday('UTC', new Date('invalid')), 'boolean');
 });
 
-test('buildPrefilledUrl handles raw form URL as formId', () => {
-  const rawFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSc_EXTRACTED_ID/viewform';
-  const entryMap = { '123456': 'Test text' };
-
-  const url = buildPrefilledUrl({
-    formId: rawFormUrl,
-    entryMap,
-  });
-
-  assert.ok(url.startsWith('https://docs.google.com/forms/d/e/1FAIpQLSc_EXTRACTED_ID/viewform?usp=pp_url&entry.123456=Test%20text'));
+test('formatTodayLabel matches the Kalvium attendance date format', () => {
+  assert.strictEqual(formatTodayLabel('Asia/Kolkata', new Date('2026-11-27T10:00:00Z')), '27 Nov 2026');
+  assert.strictEqual(formatTodayLabel('Asia/Kolkata', new Date('2026-09-01T10:00:00Z')), '01 Sept 2026');
 });
 
-test('buildPrefilledUrl maps multi-field ENTRY_MAP correctly', () => {
-  const formId = 'TEST_ID';
-  const entryMap = {
-    'entry.187493348': 'Present',
-    'entry.32162408': 'Key tasks done',
-    'entry.199221807': 'None',
-  };
+test('buildWorklogText includes tasks, challenges, and blockers', () => {
+  const text = buildWorklogText({
+    tasks: 'Built the daily worklog automation.',
+    challenges: 'None major.',
+    blockers: 'Waiting on review.',
+  });
 
-  const url = buildPrefilledUrl({ formId, entryMap });
-  assert.ok(url.includes('entry.187493348=Present'));
-  assert.ok(url.includes('entry.32162408=Key%20tasks%20done'));
-  assert.ok(url.includes('entry.199221807=None'));
+  assert.ok(text.includes('📋 Tasks completed today'));
+  assert.ok(text.includes('• Built the daily worklog automation.'));
+  assert.ok(text.includes('⚡ Challenges encountered and how you overcame them'));
+  assert.ok(text.includes('• None major.'));
+  assert.ok(text.includes("🚧 Blockers faced (challenges that you couldn't overcome)"));
+  assert.ok(text.includes('• Waiting on review.'));
 });
 
 test('getFormattedToday formats YYYY-MM-DD correctly', () => {
@@ -64,12 +48,12 @@ test('getMidnightISO returns correct UTC ISO for target timezone midnight', () =
   assert.strictEqual(iso, '2026-08-09T18:30:00.000Z');
 });
 
-test('buildPrefilledUrl handles null, undefined, or empty entryMap safely', () => {
-  const urlNull = buildPrefilledUrl({ formId: 'TEST_ID', entryMap: null });
-  assert.ok(urlNull.includes('entry.187493348='));
+test('getMidnightISO and getFormattedToday handle invalid dates and fallback timezones gracefully', () => {
+  const iso = getMidnightISO('Invalid/Timezone', new Date('invalid'));
+  assert.ok(typeof iso === 'string' && iso.endsWith('Z'));
 
-  const urlEmptyObj = buildPrefilledUrl({ formId: 'TEST_ID', entryMap: {} });
-  assert.ok(urlEmptyObj.includes('entry.187493348='));
+  const formatted = getFormattedToday('Invalid/Timezone', new Date('invalid'));
+  assert.match(formatted, /^\d{4}-\d{2}-\d{2}$/);
 });
 
 test('generateCommitSummary returns default summary text gracefully when offline or unconfigured', async () => {
@@ -78,37 +62,10 @@ test('generateCommitSummary returns default summary text gracefully when offline
   assert.ok(summary.length > 10);
 });
 
-test('config parses dryRun setting correctly', () => {
+test('config exposes Kalvium target settings and a boolean dryRun', () => {
   assert.strictEqual(typeof config.dryRun, 'boolean');
-});
-
-test('isSunday handles invalid date objects gracefully', () => {
-  assert.strictEqual(typeof isSunday('UTC', new Date('invalid')), 'boolean');
-});
-
-test('buildPrefilledUrl preserves falsy values like 0 and boolean false', () => {
-  const url = buildPrefilledUrl({
-    formId: 'TEST_ID',
-    entryMap: { 'entry.100': 0, 'entry.200': false },
-    journalSummaryText: 'Default text',
-  });
-  assert.ok(url.includes('entry.100=0'));
-  assert.ok(url.includes('entry.200=false'));
-});
-
-test('buildPrefilledUrl handles single entry ID string entryMap', () => {
-  const url = buildPrefilledUrl({
-    formId: 'TEST_ID',
-    entryMap: 'entry.999',
-    journalSummaryText: 'Summary for single field',
-  });
-  assert.ok(url.includes('entry.999=Summary%20for%20single%20field'));
-});
-
-test('getMidnightISO and getFormattedToday handle invalid dates and fallback timezones gracefully', () => {
-  const iso = getMidnightISO('Invalid/Timezone', new Date('invalid'));
-  assert.ok(typeof iso === 'string' && iso.endsWith('Z'));
-
-  const formatted = getFormattedToday('Invalid/Timezone', new Date('invalid'));
-  assert.match(formatted, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(config.kalviumUrl.startsWith('https://'));
+  assert.strictEqual(config.workStatus, DEFAULT_WORK_STATUS);
+  assert.ok(config.worklogChallenges.length > 0);
+  assert.ok(config.worklogBlockers.length > 0);
 });
